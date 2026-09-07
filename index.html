@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Look to Learn - パイ投げゲーム</title>
+  <title>Look to Learn - パイ投げゲーム（的サイズ拡大・位置調整版）</title>
   <!-- 視線追跡ライブラリ WebGazer.js -->
   <script src="https://webgazer.cs.brown.edu/webgazer.js"></script>
   <style>
@@ -29,13 +29,11 @@
       position: absolute;
       top: 50%;
       transform: translateY(-50%);
-      /* 【変更点】元の200pxから物理サイズで3cm大きく変更 */
-      width: calc(200px + 3cm);
-      height: calc(200px + 3cm);
+      width: 10cm;
+      height: 12cm;
       background-color: #ffffff; /* 的の中身を白に設定 */
-      border-radius: 50%; /* 〇（丸型）に設定 */
-      /* 【変更点】的の拡大に合わせてアイコンも拡大 */
-      font-size: calc(110px + 1.8cm);
+      border-radius: 20px; 
+      font-size: 5.5cm;
       display: flex;
       justify-content: center;
       align-items: center;
@@ -43,27 +41,30 @@
       user-select: none;
       transition: opacity 0.3s ease;
       cursor: pointer;
+      overflow: hidden; /* ゲージが的からはみ出ないように */
     }
-    #target-left { left: 10%; }
-    #target-right { right: 10%; }
+    #target-left { left: calc(10% + 2cm); }
+    #target-right { right: calc(10% + 2cm); }
 
     /* ゲージ（タイマー）演出 */
     .progress-ring {
       position: absolute;
-      top: -10px;
-      left: -10px;
-      /* 【変更点】的のサイズに合わせてゲージ領域も拡大 */
-      width: calc(220px + 3cm);
-      height: calc(220px + 3cm);
-      border-radius: 50%;
-      border: 10px solid transparent;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border-radius: 20px;
+      border: 15px solid transparent;
       box-sizing: border-box;
       pointer-events: none;
     }
+    /* 注視・カーソルホバー中の演出 */
     .gazing .progress-ring {
-      border-color: #ff3333; /* 注視・カーソルホバー中の赤色枠 */
-      animation: fillProgress 3s linear forwards;
+      border-color: #ff3333; 
+      /* animation-durationを2sに変更 */
+      animation: fillProgress 2s linear forwards;
     }
+    /* 的の下から上へ赤色が満たされていくアニメーション */
     @keyframes fillProgress {
       0% { clip-path: inset(100% 0 0 0); }
       100% { clip-path: inset(0 0 0 0); }
@@ -195,10 +196,10 @@
       currentActiveTarget = target;
       currentActiveTarget.classList.add('gazing');
       
-      // 3秒間の注視・ホバータイマー開始
+      // setTimeoutの時間を2000msに変更
       gazeTimer = setTimeout(() => {
         throwPie(currentActiveTarget);
-      }, 3000);
+      }, 2000);
     }
 
     function isInside(x, y, rect) {
@@ -235,7 +236,9 @@
       pie.style.top = '100%';
       document.body.appendChild(pie);
 
+      // 的の中心に着弾するようにパイの位置を計算
       setTimeout(() => {
+        // パイのサイズを約110pxとし、その中心が的の中心と重なるように
         pie.style.left = `${rect.left + rect.width / 2 - 55}px`;
         pie.style.top = `${rect.top + rect.height / 2 - 55}px`;
       }, 50);
