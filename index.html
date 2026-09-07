@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Look to Learn - パイ投げゲーム（的サイズ拡大・位置調整版）</title>
+  <title>Look to Learn - パイ投げゲーム</title>
   <!-- 視線追跡ライブラリ WebGazer.js -->
   <script src="https://webgazer.cs.brown.edu/webgazer.js"></script>
   <style>
@@ -61,7 +61,6 @@
     /* 注視・カーソルホバー中の演出 */
     .gazing .progress-ring {
       border-color: #ff3333; 
-      /* animation-durationを2sに変更 */
       animation: fillProgress 2s linear forwards;
     }
     /* 的の下から上へ赤色が満たされていくアニメーション */
@@ -84,17 +83,59 @@
       display: none !important;
     }
 
-    /* クリア画面 */
-    #clear-screen {
-      display: none;
+    /* カテゴリ選択画面・クリア画面のオーバーレイ */
+    .overlay {
       position: absolute;
       top: 0; left: 0; width: 100%; height: 100%;
       background: rgba(0, 0, 0, 0.95);
       z-index: 200;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
       text-align: center;
-      padding-top: 20%;
-      font-size: 48px;
+    }
+
+    .overlay h1 {
+      font-size: 40px;
+      margin-bottom: 30px;
+      color: #ffffff;
+    }
+
+    .category-buttons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      width: 80%;
+      max-width: 600px;
+    }
+
+    .btn {
+      background-color: #333333;
+      color: #ffffff;
+      border: 3px solid #ffffff;
+      border-radius: 15px;
+      padding: 20px;
+      font-size: 28px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background-color 0.2s, transform 0.1s;
+    }
+
+    .btn:hover {
+      background-color: #ff69b4;
+      color: #ffffff;
+      transform: scale(1.05);
+    }
+
+    #clear-screen h1 {
       color: #ff69b4;
+      font-size: 48px;
+    }
+
+    #next-stage-btn {
+      margin-top: 30px;
+      background-color: #ff3333;
     }
   </style>
 </head>
@@ -102,19 +143,34 @@
 
   <div id="info-bar">成功: <span id="score">0</span> / 5</div>
   
-  <!-- 左の的（最初は表示） -->
-  <div id="target-left" class="target">
+  <!-- 左の的 -->
+  <div id="target-left" class="target hidden">
     <div class="progress-ring"></div>
     <span class="icon">🍎</span>
   </div>
   
-  <!-- 右の的（最初は非表示） -->
+  <!-- 右の的 -->
   <div id="target-right" class="target hidden">
     <div class="progress-ring"></div>
     <span class="icon">🍌</span>
   </div>
 
-  <div id="clear-screen">🎉 おめでとう！クリア！ 🎉</div>
+  <!-- スタート／ステージ選択画面 -->
+  <div id="start-screen" class="overlay">
+    <h1>あそぶステージをえらんでね</h1>
+    <div class="category-buttons">
+      <button class="btn" onclick="selectCategory('fruits')">🍎 くだもの</button>
+      <button class="btn" onclick="selectCategory('animals')">🐶 どうぶつ</button>
+      <button class="btn" onclick="selectCategory('vegetables')">🥦 やさい</button>
+      <button class="btn" onclick="selectCategory('vehicles')">🚗 のりもの</button>
+    </div>
+  </div>
+
+  <!-- クリア画面 -->
+  <div id="clear-screen" class="overlay hidden">
+    <h1>🎉 おめでとう！クリア！ 🎉</h1>
+    <button id="next-stage-btn" class="btn" onclick="showCategorySelect()">つぎのステージへ</button>
+  </div>
 
   <script>
     let score = 0;
@@ -122,12 +178,20 @@
     let currentActiveTarget = null;
     let gazeTimer = null;
     let isHit = false;
+    let isGameActive = false;
 
     // 現在表示されている位置（'left' または 'right'）
     let currentPosition = 'left';
 
-    // 出現させる果物のリスト
-    const fruits = ['🍎', '🍌', '🍊', '🍇', '🍓', '🍑', '🍍', '🍈'];
+    // 出現させる要素のカテゴリ定義
+    const categories = {
+      fruits: ['🍎', '🍌', '🍊', '🍇', '🍓', '🍑', '🍍', '🍈'],
+      animals: ['🐶', '🐱', '🐰', '🦊', '🐻', '🐼', '🦁', '🐯'],
+      vegetables: ['🥦', '🥕', '🌽', '🍅', '茄', '🥬', '🍠', '🫑'],
+      vehicles: ['🚗', '🚃', '✈️', '🚀', '🚢', '🚁', '🚲', '🚑']
+    };
+
+    let currentCategoryList = categories.fruits;
 
     window.onload = async () => {
       // 1. マウスカーソル用のイベントリスナー設定
@@ -137,7 +201,7 @@
       try {
         await webgazer.setRegression('ridge')
           .setGazeListener((data, elapsedTime) => {
-            if (data == null || isHit || score >= maxScore) return;
+            if (!isGameActive || data == null || isHit || score >= maxScore) return;
             
             const x = data.x;
             const y = data.y;
@@ -154,12 +218,57 @@
       }
     };
 
+    // カテゴリ選択とゲームのスタート処理
+    function selectCategory(categoryKey) {
+      currentCategoryList = categories[categoryKey];
+      
+      // スコアのリセット
+      score = 0;
+      document.getElementById('score').innerText = score;
+      isHit = false;
+
+      // 画面の表示切り替え
+      document.getElementById('start-screen').classList.add('hidden');
+      document.getElementById('clear-screen').classList.add('hidden');
+
+      // 的の初期表示
+      currentPosition = 'left';
+      const leftElem = document.getElementById('target-left');
+      const rightElem = document.getElementById('target-right');
+      
+      leftElem.querySelector('.icon').innerText = getRandomIcon();
+      leftElem.classList.remove('hidden');
+      rightElem.classList.add('hidden');
+
+      if (typeof webgazer !== 'undefined') webgazer.resume();
+      isGameActive = true;
+    }
+
+    // ステージ選択（スタート）画面に戻る処理
+    function showCategorySelect() {
+      isGameActive = false;
+      resetTimer();
+      document.getElementById('target-left').classList.add('hidden');
+      document.getElementById('target-right').classList.add('hidden');
+      document.getElementById('clear-screen').classList.add('hidden');
+      document.getElementById('start-screen').classList.remove('hidden');
+    }
+
+    // アイコンのランダム選出
+    function getRandomIcon(excludeIcon = '') {
+      let icon;
+      do {
+        icon = currentCategoryList[Math.floor(Math.random() * currentCategoryList.length)];
+      } while (icon === excludeIcon && currentCategoryList.length > 1);
+      return icon;
+    }
+
     // マウスカーソルのホバーイベントを設定
     function setupMouseEvents() {
       const targets = document.querySelectorAll('.target');
       targets.forEach(target => {
         target.addEventListener('mouseenter', () => {
-          if (isHit || score >= maxScore || target.classList.contains('hidden')) return;
+          if (!isGameActive || isHit || score >= maxScore || target.classList.contains('hidden')) return;
           startTargetTimer(target);
         });
 
@@ -196,7 +305,7 @@
       currentActiveTarget = target;
       currentActiveTarget.classList.add('gazing');
       
-      // setTimeoutの時間を2000msに変更
+      // 2秒間の注視・ホバータイマー開始
       gazeTimer = setTimeout(() => {
         throwPie(currentActiveTarget);
       }, 2000);
@@ -238,7 +347,6 @@
 
       // 的の中心に着弾するようにパイの位置を計算
       setTimeout(() => {
-        // パイのサイズを約110pxとし、その中心が的の中心と重なるように
         pie.style.left = `${rect.left + rect.width / 2 - 55}px`;
         pie.style.top = `${rect.top + rect.height / 2 - 55}px`;
       }, 50);
@@ -257,10 +365,11 @@
           pie.remove();
 
           if (score >= maxScore) {
-            document.getElementById('clear-screen').style.display = 'block';
+            isGameActive = false;
+            document.getElementById('clear-screen').classList.remove('hidden');
             if (typeof webgazer !== 'undefined') webgazer.pause();
           } else {
-            // 2. もう片方の位置に新しい果物を表示
+            // 2. もう片方の位置に新しい的を表示
             switchToNextTarget();
             isHit = false;
           }
@@ -270,7 +379,6 @@
 
     // 左右交互に新しい的を表示する関数
     function switchToNextTarget() {
-      // 位置の切り替え（leftならrightへ、rightならleftへ）
       currentPosition = (currentPosition === 'left') ? 'right' : 'left';
       
       const nextElem = currentPosition === 'left' 
@@ -279,14 +387,9 @@
 
       const iconSpan = nextElem.querySelector('.icon');
       
-      // 前回の果物と被らないようにランダム選出
-      const currentFruit = document.querySelector('.target:not(.hidden) .icon')?.innerText;
-      let nextFruit;
-      do {
-        nextFruit = fruits[Math.floor(Math.random() * fruits.length)];
-      } while (nextFruit === currentFruit);
-
-      iconSpan.innerText = nextFruit;
+      // 前回のアイコンと被らないようにランダム選出
+      const currentIcon = document.querySelector('.target:not(.hidden) .icon')?.innerText;
+      iconSpan.innerText = getRandomIcon(currentIcon);
       
       // 表示
       nextElem.classList.remove('hidden');
