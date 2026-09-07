@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -30,11 +29,13 @@
       position: absolute;
       top: 50%;
       transform: translateY(-50%);
-      width: 200px;
-      height: 200px;
+      /* 【変更点】元の200pxから物理サイズで3cm大きく変更 */
+      width: calc(200px + 3cm);
+      height: calc(200px + 3cm);
       background-color: #ffffff; /* 的の中身を白に設定 */
       border-radius: 50%; /* 〇（丸型）に設定 */
-      font-size: 110px;
+      /* 【変更点】的の拡大に合わせてアイコンも拡大 */
+      font-size: calc(110px + 1.8cm);
       display: flex;
       justify-content: center;
       align-items: center;
@@ -43,16 +44,17 @@
       transition: opacity 0.3s ease;
       cursor: pointer;
     }
-    #target-left { left: 15%; }
-    #target-right { right: 15%; }
+    #target-left { left: 10%; }
+    #target-right { right: 10%; }
 
     /* ゲージ（タイマー）演出 */
     .progress-ring {
       position: absolute;
       top: -10px;
       left: -10px;
-      width: 220px;
-      height: 220px;
+      /* 【変更点】的のサイズに合わせてゲージ領域も拡大 */
+      width: calc(220px + 3cm);
+      height: calc(220px + 3cm);
       border-radius: 50%;
       border: 10px solid transparent;
       box-sizing: border-box;
