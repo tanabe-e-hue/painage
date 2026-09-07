@@ -1,0 +1,291 @@
+
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Look to Learn - パイ投げゲーム</title>
+  <!-- 視線追跡ライブラリ WebGazer.js -->
+  <script src="https://webgazer.cs.brown.edu/webgazer.js"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background-color: #000000; /* 背景を黒に設定 */
+      color: #ffffff;
+      font-family: sans-serif;
+      touch-action: none;
+    }
+    #info-bar {
+      position: absolute;
+      top: 15px;
+      left: 20px;
+      font-size: 24px;
+      font-weight: bold;
+      z-index: 100;
+      color: #ffffff;
+    }
+    .target {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 200px;
+      height: 200px;
+      background-color: #ffffff; /* 的の中身を白に設定 */
+      border-radius: 50%; /* 〇（丸型）に設定 */
+      font-size: 110px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      box-sizing: border-box;
+      user-select: none;
+      transition: opacity 0.3s ease;
+      cursor: pointer;
+    }
+    #target-left { left: 15%; }
+    #target-right { right: 15%; }
+
+    /* ゲージ（タイマー）演出 */
+    .progress-ring {
+      position: absolute;
+      top: -10px;
+      left: -10px;
+      width: 220px;
+      height: 220px;
+      border-radius: 50%;
+      border: 10px solid transparent;
+      box-sizing: border-box;
+      pointer-events: none;
+    }
+    .gazing .progress-ring {
+      border-color: #ff3333; /* 注視・カーソルホバー中の赤色枠 */
+      animation: fillProgress 3s linear forwards;
+    }
+    @keyframes fillProgress {
+      0% { clip-path: inset(100% 0 0 0); }
+      100% { clip-path: inset(0 0 0 0); }
+    }
+
+    /* パイの演出 */
+    .pie {
+      position: absolute;
+      font-size: 110px;
+      z-index: 50;
+      transition: all 0.4s ease-in-out;
+      pointer-events: none;
+    }
+    
+    /* 非表示状態 */
+    .hidden {
+      display: none !important;
+    }
+
+    /* クリア画面 */
+    #clear-screen {
+      display: none;
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.95);
+      z-index: 200;
+      text-align: center;
+      padding-top: 20%;
+      font-size: 48px;
+      color: #ff69b4;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="info-bar">成功: <span id="score">0</span> / 5</div>
+  
+  <!-- 左の的（最初は表示） -->
+  <div id="target-left" class="target">
+    <div class="progress-ring"></div>
+    <span class="icon">🍎</span>
+  </div>
+  
+  <!-- 右の的（最初は非表示） -->
+  <div id="target-right" class="target hidden">
+    <div class="progress-ring"></div>
+    <span class="icon">🍌</span>
+  </div>
+
+  <div id="clear-screen">🎉 おめでとう！クリア！ 🎉</div>
+
+  <script>
+    let score = 0;
+    const maxScore = 5;
+    let currentActiveTarget = null;
+    let gazeTimer = null;
+    let isHit = false;
+
+    // 現在表示されている位置（'left' または 'right'）
+    let currentPosition = 'left';
+
+    // 出現させる果物のリスト
+    const fruits = ['🍎', '🍌', '🍊', '🍇', '🍓', '🍑', '🍍', '🍈'];
+
+    window.onload = async () => {
+      // 1. マウスカーソル用のイベントリスナー設定
+      setupMouseEvents();
+
+      // 2. WebGazer（視線追跡）の初期化
+      try {
+        await webgazer.setRegression('ridge')
+          .setGazeListener((data, elapsedTime) => {
+            if (data == null || isHit || score >= maxScore) return;
+            
+            const x = data.x;
+            const y = data.y;
+
+            checkGaze(x, y);
+          })
+          .saveDataAcrossSessions(true)
+          .begin();
+
+        webgazer.showVideoPreview(true)
+                 .showPredictionPoints(true);
+      } catch (e) {
+        console.log("WebGazerの読み込みをスキップ、またはカメラ非対応環境です");
+      }
+    };
+
+    // マウスカーソルのホバーイベントを設定
+    function setupMouseEvents() {
+      const targets = document.querySelectorAll('.target');
+      targets.forEach(target => {
+        target.addEventListener('mouseenter', () => {
+          if (isHit || score >= maxScore || target.classList.contains('hidden')) return;
+          startTargetTimer(target);
+        });
+
+        target.addEventListener('mouseleave', () => {
+          if (currentActiveTarget === target) {
+            resetTimer();
+          }
+        });
+      });
+    }
+
+    // 視線座標（WebGazer）による判定
+    function checkGaze(x, y) {
+      const activeElem = currentPosition === 'left' 
+        ? document.getElementById('target-left') 
+        : document.getElementById('target-right');
+
+      if (activeElem.classList.contains('hidden')) return;
+
+      const rect = activeElem.getBoundingClientRect();
+
+      if (isInside(x, y, rect)) {
+        if (currentActiveTarget !== activeElem) {
+          startTargetTimer(activeElem);
+        }
+      } else if (currentActiveTarget && !isMouseOver(currentActiveTarget)) {
+        resetTimer();
+      }
+    }
+
+    // タイマー開始処理の共通化
+    function startTargetTimer(target) {
+      resetTimer();
+      currentActiveTarget = target;
+      currentActiveTarget.classList.add('gazing');
+      
+      // 3秒間の注視・ホバータイマー開始
+      gazeTimer = setTimeout(() => {
+        throwPie(currentActiveTarget);
+      }, 3000);
+    }
+
+    function isInside(x, y, rect) {
+      return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+    }
+
+    function isMouseOver(element) {
+      return element.matches(':hover');
+    }
+
+    function resetTimer() {
+      if (gazeTimer) {
+        clearTimeout(gazeTimer);
+        gazeTimer = null;
+      }
+      if (currentActiveTarget) {
+        currentActiveTarget.classList.remove('gazing');
+        currentActiveTarget = null;
+      }
+    }
+
+    // パイ投げアニメーション ＆ 消去・もう片方の的へシフトする処理
+    function throwPie(targetElem) {
+      isHit = true;
+      resetTimer();
+
+      const rect = targetElem.getBoundingClientRect();
+      const pie = document.createElement('div');
+      pie.className = 'pie';
+      pie.innerHTML = '🥧';
+      
+      // 画面下中央から発射
+      pie.style.left = '50%';
+      pie.style.top = '100%';
+      document.body.appendChild(pie);
+
+      setTimeout(() => {
+        pie.style.left = `${rect.left + rect.width / 2 - 55}px`;
+        pie.style.top = `${rect.top + rect.height / 2 - 55}px`;
+      }, 50);
+
+      // ヒット演出と切り替え
+      setTimeout(() => {
+        pie.innerHTML = '💥';
+        
+        // 1. 現在の的を消す
+        targetElem.classList.add('hidden');
+
+        score++;
+        document.getElementById('score').innerText = score;
+
+        setTimeout(() => {
+          pie.remove();
+
+          if (score >= maxScore) {
+            document.getElementById('clear-screen').style.display = 'block';
+            if (typeof webgazer !== 'undefined') webgazer.pause();
+          } else {
+            // 2. もう片方の位置に新しい果物を表示
+            switchToNextTarget();
+            isHit = false;
+          }
+        }, 600);
+      }, 450);
+    }
+
+    // 左右交互に新しい的を表示する関数
+    function switchToNextTarget() {
+      // 位置の切り替え（leftならrightへ、rightならleftへ）
+      currentPosition = (currentPosition === 'left') ? 'right' : 'left';
+      
+      const nextElem = currentPosition === 'left' 
+        ? document.getElementById('target-left') 
+        : document.getElementById('target-right');
+
+      const iconSpan = nextElem.querySelector('.icon');
+      
+      // 前回の果物と被らないようにランダム選出
+      const currentFruit = document.querySelector('.target:not(.hidden) .icon')?.innerText;
+      let nextFruit;
+      do {
+        nextFruit = fruits[Math.floor(Math.random() * fruits.length)];
+      } while (nextFruit === currentFruit);
+
+      iconSpan.innerText = nextFruit;
+      
+      // 表示
+      nextElem.classList.remove('hidden');
+    }
+  </script>
+</body>
+</html>
